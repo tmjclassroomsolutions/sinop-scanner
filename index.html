@@ -145,29 +145,38 @@
             ctx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
             
             try {
-                const imgData = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
                 const d = imgData.data;
 
-                function darkRatio(x1, x2, y1, y2) {
-                    let dark = 0, count = 0;
+                // 1. Calculate overall scene brightness to guard against dark/black screens
+                let totalB = 0;
+                for (let i = 0; i < d.length; i += 4) {
+                    totalB += (d[i] + d[i+1] + d[i+2]) / 3;
+                }
+                const avgB = totalB / (sampleCanvas.width * sampleCanvas.height);
+                if (avgB < 85) return; // Ignore dark/black room or phone resting on table
+
+                function checkCornerMarker(x1, x2, y1, y2) {
+                    let dark = 0, light = 0, count = 0;
                     for (let y = y1; y < y2; y++) {
                         for (let x = x1; x < x2; x++) {
                             const idx = (y * sampleCanvas.width + x) * 4;
-                            const brightness = (d[idx] + d[idx+1] + d[idx+2]) / 3;
-                            if (brightness < 75) dark++;
+                            const b = (d[idx] + d[idx+1] + d[idx+2]) / 3;
+                            if (b < 70) dark++;
+                            if (b > 130) light++;
                             count++;
                         }
                     }
-                    return dark / count;
+                    // Requires both dark square AND white paper background in the corner!
+                    return (dark / count > 0.12) && (light / count > 0.15);
                 }
 
                 // Check 4 corners corresponding to 90px targets
-                const tl = darkRatio(5, 30, 5, 30);
-                const tr = darkRatio(130, 155, 5, 30);
-                const bl = darkRatio(5, 30, 190, 215);
-                const br = darkRatio(130, 155, 190, 215);
+                const tl = checkCornerMarker(5, 30, 5, 30);
+                const tr = checkCornerMarker(130, 155, 5, 30);
+                const bl = checkCornerMarker(5, 30, 190, 215);
+                const br = checkCornerMarker(130, 155, 190, 215);
 
-                if (tl > 0.12 && tr > 0.12 && bl > 0.12 && br > 0.12) {
+                if (tl && tr && bl && br) {
                     lastAutoScan = Date.now();
                     isCapturing = true;
                     
