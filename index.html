@@ -145,6 +145,7 @@
             ctx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
             
             try {
+                const imgData = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
                 const d = imgData.data;
 
                 // 1. Calculate overall scene brightness to guard against dark/black screens
@@ -180,6 +181,10 @@
                     lastAutoScan = Date.now();
                     isCapturing = true;
                     
+                    if (navigator.vibrate) {
+                        try { navigator.vibrate(100); } catch(ve) {}
+                    }
+
                     const box = document.querySelector('.overlay-box');
                     if (box) {
                         box.classList.add('scanned-flash');
@@ -188,7 +193,7 @@
                     
                     showStatus('⚡ Auto-Scanned Paper!', 1500);
                     captureBtn.click();
-                    setTimeout(() => { isCapturing = false; }, 2000);
+                    setTimeout(() => { isCapturing = false; }, 2500);
                 }
             } catch(e) {}
         }
