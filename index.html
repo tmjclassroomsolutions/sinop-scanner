@@ -11,17 +11,18 @@
         .camera-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; background: black; }
         video { min-width: 100%; min-height: 100%; object-fit: cover; }
         .overlay { position: absolute; inset: 0; pointer-events: none; box-sizing: border-box; }
-        .overlay-box { position: absolute; top: 8%; left: 8%; right: 8%; bottom: 8%; border: 2px dashed rgba(16, 185, 129, 0.5); border-radius: 12px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.55); }
-        .corner-target { position: absolute; width: 40px; height: 40px; border: 4px solid #10b981; box-sizing: border-box; background: rgba(16, 185, 129, 0.2); }
-        .corner-target.top-left { top: -2px; left: -2px; border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
-        .corner-target.top-right { top: -2px; right: -2px; border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }
-        .corner-target.bottom-left { bottom: -2px; left: -2px; border-right: none; border-top: none; border-radius: 0 0 0 8px; }
-        .corner-target.bottom-right { bottom: -2px; right: -2px; border-left: none; border-top: none; border-radius: 0 0 8px 0; }
-        .align-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.85); color: #34d399; padding: 6px 14px; border-radius: 16px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; border: 1px solid rgba(52, 211, 153, 0.3); }
+        .overlay-box { position: absolute; top: 6%; left: 6%; right: 6%; bottom: 6%; border: 2px dashed rgba(16, 185, 129, 0.4); border-radius: 16px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.6); transition: border-color 0.2s, box-shadow 0.2s; }
+        .overlay-box.scanned-flash { border-color: #10b981; border-style: solid; border-width: 4px; box-shadow: 0 0 0 4000px rgba(16, 185, 129, 0.3); }
+        .corner-target { position: absolute; width: 90px; height: 90px; border: 6px solid #10b981; box-sizing: border-box; background: rgba(16, 185, 129, 0.15); }
+        .corner-target.top-left { top: -3px; left: -3px; border-right: none; border-bottom: none; border-radius: 14px 0 0 0; }
+        .corner-target.top-right { top: -3px; right: -3px; border-left: none; border-bottom: none; border-radius: 0 14px 0 0; }
+        .corner-target.bottom-left { bottom: -3px; left: -3px; border-right: none; border-top: none; border-radius: 0 0 0 14px; }
+        .corner-target.bottom-right { bottom: -3px; right: -3px; border-left: none; border-top: none; border-radius: 0 0 14px 0; }
+        .align-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.9); color: #34d399; padding: 8px 18px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; border: 1.5px solid rgba(52, 211, 153, 0.4); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
         .controls { background: #1e293b; padding: 20px; display: flex; justify-content: space-around; align-items: center; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
         .capture-btn { width: 70px; height: 70px; border-radius: 50%; background: white; border: 4px solid #cbd5e1; outline: 3px solid white; outline-offset: 2px; cursor: pointer; transition: transform 0.1s; }
         .capture-btn:active { transform: scale(0.95); background: #e2e8f0; }
-        .status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; z-index: 20; display: none; }
+        .status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 24px; font-size: 0.95rem; font-weight: 600; z-index: 20; display: none; border: 1px solid rgba(255,255,255,0.2); }
         .status.show { display: block; }
     </style>
 </head>
@@ -128,6 +129,62 @@
                 }, timeout);
             }
         }
+
+        // Auto Scan & Marker Detection Logic
+        let lastAutoScan = 0;
+        let isCapturing = false;
+
+        function checkAutoDetect() {
+            if (isCapturing || Date.now() - lastAutoScan < 2500) return;
+            if (!video.videoWidth || !video.videoHeight) return;
+
+            const sampleCanvas = document.createElement('canvas');
+            sampleCanvas.width = 160;
+            sampleCanvas.height = 220;
+            const ctx = sampleCanvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
+            
+            try {
+                const imgData = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
+                const d = imgData.data;
+
+                function darkRatio(x1, x2, y1, y2) {
+                    let dark = 0, count = 0;
+                    for (let y = y1; y < y2; y++) {
+                        for (let x = x1; x < x2; x++) {
+                            const idx = (y * sampleCanvas.width + x) * 4;
+                            const brightness = (d[idx] + d[idx+1] + d[idx+2]) / 3;
+                            if (brightness < 75) dark++;
+                            count++;
+                        }
+                    }
+                    return dark / count;
+                }
+
+                // Check 4 corners corresponding to 90px targets
+                const tl = darkRatio(5, 30, 5, 30);
+                const tr = darkRatio(130, 155, 5, 30);
+                const bl = darkRatio(5, 30, 190, 215);
+                const br = darkRatio(130, 155, 190, 215);
+
+                if (tl > 0.12 && tr > 0.12 && bl > 0.12 && br > 0.12) {
+                    lastAutoScan = Date.now();
+                    isCapturing = true;
+                    
+                    const box = document.querySelector('.overlay-box');
+                    if (box) {
+                        box.classList.add('scanned-flash');
+                        setTimeout(() => box.classList.remove('scanned-flash'), 1200);
+                    }
+                    
+                    showStatus('⚡ Auto-Scanned Paper!', 1500);
+                    captureBtn.click();
+                    setTimeout(() => { isCapturing = false; }, 2000);
+                }
+            } catch(e) {}
+        }
+
+        setInterval(checkAutoDetect, 250);
 
         startCamera();
 
