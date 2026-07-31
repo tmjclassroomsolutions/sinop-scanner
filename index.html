@@ -5,30 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SINOP Mobile Scanner</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script async src="opencv.js" onload="onOpenCvReady();"></script>
     <style>
         body { margin: 0; padding: 0; background: #0f172a; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; position: fixed; inset: 0; overflow: hidden; }
         .header { background: #1e293b; padding: 15px 20px; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10; }
         .camera-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; background: black; }
         video { min-width: 100%; min-height: 100%; object-fit: cover; }
         .overlay { position: absolute; inset: 0; pointer-events: none; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
-        .overlay-box { position: relative; width: 88%; max-width: 500px; aspect-ratio: 1 / 1.4; max-height: 85%; border: 2px dashed rgba(255, 255, 255, 0.3); border-radius: 16px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.6); transition: border-color 0.2s, box-shadow 0.2s; }
+        .overlay-box { position: relative; width: 85%; max-width: 450px; aspect-ratio: 1 / 1.64; max-height: 85%; border: 2px dashed rgba(255, 255, 255, 0.3); border-radius: 16px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.6); transition: border-color 0.2s, box-shadow 0.2s; }
         .overlay-box.scanned-flash { background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 40px rgba(255,255,255,1), 0 0 0 4000px rgba(0,0,0,0.6); transition: background 0s, box-shadow 0s; }
-        .target-square { position: absolute; width: 50px; height: 50px; box-sizing: border-box; transition: transform 0.15s; }
+        .target-square { position: absolute; width: 50px; height: 50px; box-sizing: border-box; transition: left 0.1s linear, top 0.1s linear; transform: translate(-50%, -50%); z-index: 50; }
         .target-square::before, .target-square::after { content: ''; position: absolute; background: #94a3b8; transition: background 0.15s; }
         .target-square.matched::before, .target-square.matched::after { background: #10b981; }
-        .target-square.matched { transform: scale(1.15); }
-        .target-square.top-left::before { top: 0; left: 0; width: 100%; height: 5px; border-radius: 2px; }
-        .target-square.top-left::after { top: 0; left: 0; width: 5px; height: 100%; border-radius: 2px; }
-        .target-square.top-right::before { top: 0; right: 0; width: 100%; height: 5px; border-radius: 2px; }
-        .target-square.top-right::after { top: 0; right: 0; width: 5px; height: 100%; border-radius: 2px; }
-        .target-square.bottom-left::before { bottom: 0; left: 0; width: 100%; height: 5px; border-radius: 2px; }
-        .target-square.bottom-left::after { bottom: 0; left: 0; width: 5px; height: 100%; border-radius: 2px; }
-        .target-square.bottom-right::before { bottom: 0; right: 0; width: 100%; height: 5px; border-radius: 2px; }
-        .target-square.bottom-right::after { bottom: 0; right: 0; width: 5px; height: 100%; border-radius: 2px; }
-        .target-square.top-left { top: -2px; left: -2px; }
-        .target-square.top-right { top: -2px; right: -2px; }
-        .target-square.bottom-left { bottom: -2px; left: -2px; }
-        .target-square.bottom-right { bottom: -2px; right: -2px; }
+        .target-square.tl::before { top: 0; left: 0; width: 100%; height: 6px; border-radius: 2px; }
+        .target-square.tl::after { top: 0; left: 0; width: 6px; height: 100%; border-radius: 2px; }
+        .target-square.tr::before { top: 0; right: 0; width: 100%; height: 6px; border-radius: 2px; }
+        .target-square.tr::after { top: 0; right: 0; width: 6px; height: 100%; border-radius: 2px; }
+        .target-square.bl::before { bottom: 0; left: 0; width: 100%; height: 6px; border-radius: 2px; }
+        .target-square.bl::after { bottom: 0; left: 0; width: 6px; height: 100%; border-radius: 2px; }
+        .target-square.br::before { bottom: 0; right: 0; width: 100%; height: 6px; border-radius: 2px; }
+        .target-square.br::after { bottom: 0; right: 0; width: 6px; height: 100%; border-radius: 2px; }
         .align-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.9); color: #38bdf8; padding: 8px 18px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; border: 1.5px solid rgba(56, 189, 248, 0.4); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
         .controls { background: #1e293b; padding: 20px; display: flex; justify-content: space-around; align-items: center; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
         .capture-btn { width: 70px; height: 70px; border-radius: 50%; background: white; border: 4px solid #cbd5e1; outline: 3px solid white; outline-offset: 2px; cursor: pointer; transition: transform 0.1s; }
@@ -40,17 +36,19 @@
 <body>
     <div class="header">SINOP Scanner</div>
     <div class="status" id="statusMsg">Uploading...</div>
+    <div class="status show" id="cvLoadingMsg" style="background: #3b82f6;">Loading AI Engine...</div>
     
     <div class="camera-container">
         <video id="video" autoplay playsinline></video>
         <div class="overlay">
-            <div class="overlay-box">
-                <div class="target-square top-left" id="targetTL"></div>
-                <div class="target-square top-right" id="targetTR"></div>
-                <div class="target-square bottom-left" id="targetBL"></div>
-                <div class="target-square bottom-right" id="targetBR"></div>
-                <div class="align-hint" id="alignHint">Align 4 corner squares to scan</div>
+            <div class="overlay-box" style="opacity: 0.35;">
+                <div class="align-hint" id="alignHint">Find 4 corner squares</div>
             </div>
+            <!-- Dynamic AR Brackets -->
+            <div class="target-square tl" id="targetTL" style="display: none;"></div>
+            <div class="target-square tr" id="targetTR" style="display: none;"></div>
+            <div class="target-square bl" id="targetBL" style="display: none;"></div>
+            <div class="target-square br" id="targetBR" style="display: none;"></div>
         </div>
     </div>
     
@@ -141,135 +139,223 @@
             }
         }
 
-        // Auto Scan & Marker Detection Logic
-        let lastAutoScan = 0;
-        let isCapturing = false;
-
-        function checkAutoDetect() {
-            if (isCapturing || Date.now() - lastAutoScan < 2500) return;
-            if (!video.videoWidth || !video.videoHeight) return;
-
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            const sampleCanvas = document.createElement('canvas');
-            sampleCanvas.width = w;
-            sampleCanvas.height = h;
-            const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
-            
-            try {
-                // Mimic object-fit: cover
-                const videoRatio = video.videoWidth / video.videoHeight;
-                const screenRatio = w / h;
-                let drawW = w, drawH = h, drawX = 0, drawY = 0;
-                
-                if (videoRatio > screenRatio) {
-                    drawW = h * videoRatio;
-                    drawX = (w - drawW) / 2;
-                } else {
-                    drawH = w / videoRatio;
-                    drawY = (h - drawH) / 2;
-                }
-                
-                ctx.drawImage(video, drawX, drawY, drawW, drawH);
-
-                function checkSquare(id) {
-                    const el = document.getElementById(id);
-                    if (!el) return false;
-                    const rect = el.getBoundingClientRect();
-                    
-                    const sx = Math.max(0, Math.floor(rect.left));
-                    const sy = Math.max(0, Math.floor(rect.top));
-                    const sw = Math.floor(rect.width);
-                    const sh = Math.floor(rect.height);
-                    
-                    if (sx + sw > w || sy + sh > h) return false;
-
-                    const imgData = ctx.getImageData(sx, sy, sw, sh);
-                    const d = imgData.data;
-                    let dark = 0, light = 0, count = 0;
-                    
-                    for (let i = 0; i < d.length; i += 4) {
-                        const b = (d[i] + d[i+1] + d[i+2]) / 3;
-                        if (b < 75) dark++;
-                        if (b > 120) light++;
-                        count++;
-                    }
-                    
-                    // Allow looser dark/light constraints for easier snapping
-                    return (dark / count > 0.05) && (light / count > 0.08);
-                }
-
-                const tl = checkSquare('targetTL');
-                const tr = checkSquare('targetTR');
-                const bl = checkSquare('targetBL');
-                const br = checkSquare('targetBR');
-
-                setSquareMatched('targetTL', tl);
-                setSquareMatched('targetTR', tr);
-                setSquareMatched('targetBL', bl);
-                setSquareMatched('targetBR', br);
-
-                if (tl && tr && bl && br) {
-                    lastAutoScan = Date.now();
-                    isCapturing = true;
-                    
-                    if (navigator.vibrate) {
-                        try { navigator.vibrate([100, 50, 100]); } catch(ve) {}
-                    }
-                    
-                    try {
-                        const AudioContext = window.AudioContext || window.webkitAudioContext;
-                        if (AudioContext) {
-                            const ctx = new AudioContext();
-                            const playBeep = (time, freq) => {
-                                const osc = ctx.createOscillator();
-                                const gain = ctx.createGain();
-                                osc.connect(gain);
-                                gain.connect(ctx.destination);
-                                osc.type = 'sine';
-                                osc.frequency.setValueAtTime(freq, time);
-                                gain.gain.setValueAtTime(0, time);
-                                gain.gain.linearRampToValueAtTime(0.5, time + 0.02);
-                                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-                                osc.start(time);
-                                osc.stop(time + 0.1);
-                            };
-                            playBeep(ctx.currentTime, 1200);
-                            playBeep(ctx.currentTime + 0.1, 1600);
-                        }
-                    } catch(e) {}
-
-                    const box = document.querySelector('.overlay-box');
-                    if (box) {
-                        box.classList.add('scanned-flash');
-                        setTimeout(() => box.classList.remove('scanned-flash'), 800);
-                    }
-                    
-                    showStatus('⚡ 4 Corners Matched! Auto-Scanned!', 1500);
-                    captureBtn.click();
-                    setTimeout(() => { 
-                        isCapturing = false;
-                        resetTargetSquares();
-                    }, 2500);
-                }
-            } catch(e) {}
+        let cvReady = false;
+        function onOpenCvReady() {
+            cvReady = true;
+            const cvLoading = document.getElementById('cvLoadingMsg');
+            if (cvLoading) cvLoading.style.display = 'none';
+            startTrackingLoop();
         }
 
-        function setSquareMatched(id, isMatched) {
+        // Auto Scan & Marker Detection Logic
+        let isCapturing = false;
+        let lastLockTime = 0;
+        let trackingAnimId = null;
+
+        function startTrackingLoop() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            
+            // Hidden canvas for OpenCV processing (downscaled)
+            const procW = 320;
+            const procH = Math.floor(procW * (h / w));
+            const procCanvas = document.createElement('canvas');
+            procCanvas.width = procW;
+            procCanvas.height = procH;
+            const pCtx = procCanvas.getContext('2d', { willReadFrequently: true });
+
+            function processFrame() {
+                if (!cvReady || isCapturing) {
+                    trackingAnimId = requestAnimationFrame(processFrame);
+                    return;
+                }
+                if (!video.videoWidth) {
+                    trackingAnimId = requestAnimationFrame(processFrame);
+                    return;
+                }
+
+                let srcMat = new cv.Mat(procH, procW, cv.CV_8UC4);
+                let grayMat = new cv.Mat();
+                let blurMat = new cv.Mat();
+                let threshMat = new cv.Mat();
+                let contours = new cv.MatVector();
+                let hierarchy = new cv.Mat();
+
+                try {
+                    // Draw video centered and cropped to fit aspect ratio
+                    const videoRatio = video.videoWidth / video.videoHeight;
+                    const screenRatio = w / h;
+                    let drawW = procW, drawH = procH, drawX = 0, drawY = 0;
+                    
+                    if (videoRatio > screenRatio) {
+                        drawW = procH * videoRatio;
+                        drawX = (procW - drawW) / 2;
+                    } else {
+                        drawH = procW / videoRatio;
+                        drawY = (procH - drawH) / 2;
+                    }
+                    pCtx.drawImage(video, drawX, drawY, drawW, drawH);
+
+                    // Read into OpenCV
+                    srcMat.data.set(pCtx.getImageData(0, 0, procW, procH).data);
+                    
+                    cv.cvtColor(srcMat, grayMat, cv.COLOR_RGBA2GRAY);
+                    cv.GaussianBlur(grayMat, blurMat, new cv.Size(5, 5), 0);
+                    cv.adaptiveThreshold(blurMat, threshMat, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+                    
+                    cv.findContours(threshMat, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+                    let squares = [];
+                    const minArea = (procW * procH) * 0.0005;
+                    const maxArea = (procW * procH) * 0.08;
+
+                    for (let i = 0; i < contours.size(); i++) {
+                        let cnt = contours.get(i);
+                        let area = cv.contourArea(cnt);
+                        
+                        if (area > minArea && area < maxArea) {
+                            let rect = cv.boundingRect(cnt);
+                            let aspect = rect.width / rect.height;
+                            
+                            // 2. Strict Contour Filtering
+                            if (aspect > 0.7 && aspect < 1.3) {
+                                let M = cv.moments(cnt, false);
+                                if (M.m00 > 0) {
+                                    let cx = M.m10 / M.m00;
+                                    let cy = M.m01 / M.m00;
+                                    
+                                    let screenX = (cx / procW) * w;
+                                    let screenY = (cy / procH) * h;
+                                    
+                                    squares.push({ x: screenX, y: screenY, area: area });
+                                }
+                            }
+                        }
+                        cnt.delete(); // 1. CRITICAL: Memory Leak Prevention
+                    }
+
+                    if (squares.length >= 4) {
+                        squares.sort((a, b) => b.area - a.area);
+                        let topFour = squares.slice(0, 4);
+                        
+                        // 3. Sorting Corners correctly
+                        topFour.sort((a, b) => a.y - b.y);
+                        
+                        let topTwo = topFour.slice(0, 2);
+                        let bottomTwo = topFour.slice(2, 4);
+                        
+                        topTwo.sort((a, b) => a.x - b.x);
+                        bottomTwo.sort((a, b) => a.x - b.x);
+                        
+                        let tl = topTwo[0];
+                        let tr = topTwo[1];
+                        let bl = bottomTwo[0];
+                        let br = bottomTwo[1];
+                        
+                        let topWidth = tr.x - tl.x;
+                        let bottomWidth = br.x - bl.x;
+                        let leftHeight = bl.y - tl.y;
+                        let rightHeight = br.y - tr.y;
+                        
+                        if (topWidth > 50 && bottomWidth > 50 && leftHeight > 50 && rightHeight > 50) {
+                            updateBracket('targetTL', tl.x, tl.y);
+                            updateBracket('targetTR', tr.x, tr.y);
+                            updateBracket('targetBL', bl.x, bl.y);
+                            updateBracket('targetBR', br.x, br.y);
+                            
+                            if (lastLockTime === 0) lastLockTime = Date.now();
+                            
+                            if (Date.now() - lastLockTime > 600) {
+                                triggerAutoCapture();
+                                lastLockTime = 0;
+                            }
+                        } else {
+                            hideBrackets();
+                            lastLockTime = 0;
+                        }
+                    } else {
+                        hideBrackets();
+                        lastLockTime = 0;
+                    }
+
+                } catch (e) {
+                    console.error("OpenCV Processing Error:", e);
+                }
+
+                // 1. CRITICAL: Memory Leak Prevention
+                srcMat.delete();
+                grayMat.delete();
+                blurMat.delete();
+                threshMat.delete();
+                contours.delete();
+                hierarchy.delete();
+                
+                trackingAnimId = requestAnimationFrame(processFrame);
+            }
+            
+            processFrame();
+        }
+
+        function triggerAutoCapture() {
+            isCapturing = true;
+            if (navigator.vibrate) try { navigator.vibrate([100, 50, 100]); } catch(ve) {}
+            
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    const ctx = new AudioContext();
+                    const playBeep = (time, freq) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, time);
+                        gain.gain.setValueAtTime(0, time);
+                        gain.gain.linearRampToValueAtTime(0.5, time + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+                        osc.start(time);
+                        osc.stop(time + 0.1);
+                    };
+                    playBeep(ctx.currentTime, 1200);
+                    playBeep(ctx.currentTime + 0.1, 1600);
+                }
+            } catch(e) {}
+
+            const box = document.querySelector('.overlay-box');
+            if (box) {
+                box.classList.add('scanned-flash');
+                setTimeout(() => box.classList.remove('scanned-flash'), 800);
+            }
+            
+            showStatus('⚡ 4 Corners Matched! Auto-Scanned!', 1500);
+            captureBtn.click();
+            
+            setTimeout(() => { 
+                isCapturing = false;
+                hideBrackets();
+            }, 2500);
+        }
+
+        function updateBracket(id, x, y) {
             const el = document.getElementById(id);
-            if (!el) return;
-            if (isMatched) {
+            if (el) {
+                el.style.display = 'block';
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
                 el.classList.add('matched');
-            } else {
-                el.classList.remove('matched');
             }
         }
 
-        function resetTargetSquares() {
-            ['targetTL', 'targetTR', 'targetBL', 'targetBR'].forEach(id => setSquareMatched(id, false));
+        function hideBrackets() {
+            ['targetTL', 'targetTR', 'targetBL', 'targetBR'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('matched');
+                    el.style.display = 'none';
+                }
+            });
         }
-
-        setInterval(checkAutoDetect, 250);
 
         startCamera();
 
