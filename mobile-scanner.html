@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SINOP Mobile Scanner</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #0f172a; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .header { background: #1e293b; padding: 15px 20px; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10; }
+        .camera-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; background: black; }
+        video { min-width: 100%; min-height: 100%; object-fit: cover; }
+        .overlay { position: absolute; inset: 0; pointer-events: none; border: 2px solid rgba(255, 255, 255, 0.2); box-sizing: border-box; }
+        .overlay-box { position: absolute; top: 10%; left: 10%; right: 10%; bottom: 10%; border: 2px dashed #10b981; border-radius: 12px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.5); }
+        .controls { background: #1e293b; padding: 20px; display: flex; justify-content: space-around; align-items: center; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+        .capture-btn { width: 70px; height: 70px; border-radius: 50%; background: white; border: 4px solid #cbd5e1; outline: 3px solid white; outline-offset: 2px; cursor: pointer; transition: transform 0.1s; }
+        .capture-btn:active { transform: scale(0.95); background: #e2e8f0; }
+        .status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; z-index: 20; display: none; }
+        .status.show { display: block; }
+    </style>
+</head>
+<body>
+    <div class="header">SINOP Scanner</div>
+    <div class="status" id="statusMsg">Uploading...</div>
+    
+    <div class="camera-container">
+        <video id="video" autoplay playsinline></video>
+        <div class="overlay">
+            <div class="overlay-box"></div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <div style="width: 40px;"></div> <!-- Spacer -->
+        <button class="capture-btn" id="captureBtn"></button>
+        <button id="switchCameraBtn" style="background: none; border: none; color: white; cursor: pointer; padding: 10px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/><path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/><circle cx="16.5" cy="11.5" r="2.5"/><path d="m17 14-5 5-5-5"/></svg>
+        </button>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const captureBtn = document.getElementById('captureBtn');
+        const statusMsg = document.getElementById('statusMsg');
+        const switchBtn = document.getElementById('switchCameraBtn');
+        
+        let currentFacingMode = 'environment';
+        let stream = null;
+
+        async function startCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } } 
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("Camera access denied or unavailable.");
+                console.error(err);
+            }
+        }
+
+        switchBtn.addEventListener('click', () => {
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            startCamera();
+        });
+
+        captureBtn.addEventListener('click', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            canvas.toBlob(async (blob) => {
+                showStatus('Sending to SINOP...');
+                if (dataChannel && dataChannel.readyState === 'open') {
+                    // Send via WebRTC
+                    try {
+                        const reader = new FileReader();
+                        reader.readAsDataURL(blob);
+                        reader.onloadend = () => {
+                            dataChannel.send(reader.result);
+                            showStatus('Sent successfully!', 2000);
+                        };
+                    } catch (e) {
+                        showStatus('Connection error.', 3000);
+                    }
+                } else {
+                    // Send via Local HTTP
+                    try {
+                        const res = await fetch('/upload', {
+                            method: 'POST',
+                            body: blob
+                        });
+                        if (res.ok) {
+                            showStatus('Sent successfully!', 2000);
+                        } else {
+                            showStatus('Failed to send.', 3000);
+                        }
+                    } catch (e) {
+                        showStatus('Connection error.', 3000);
+                    }
+                }
+            }, 'image/jpeg', 0.8);
+        });
+
+        function showStatus(msg, timeout = 0) {
+            statusMsg.textContent = msg;
+            statusMsg.classList.add('show');
+            if (timeout > 0) {
+                setTimeout(() => {
+                    statusMsg.classList.remove('show');
+                }, timeout);
+            }
+        }
+
+        startCamera();
+
+        // WebRTC Logic
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetPeerId = urlParams.get('peer');
+        let dataChannel = null;
+
+        if (targetPeerId) {
+            showStatus('Connecting to Cloud Scanner...');
+            const peer = new Peer();
+            peer.on('open', (id) => {
+                const conn = peer.connect(targetPeerId);
+                conn.on('open', () => {
+                    dataChannel = conn;
+                    showStatus('Cloud Scanner Connected!', 3000);
+                });
+                conn.on('close', () => {
+                    showStatus('Cloud Disconnected', 3000);
+                    dataChannel = null;
+                });
+            });
+            peer.on('error', (err) => {
+                console.error(err);
+                showStatus('Cloud Connection Failed', 3000);
+            });
+        }
+    </script>
+</body>
+</html>
