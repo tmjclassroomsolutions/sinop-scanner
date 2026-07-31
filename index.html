@@ -76,7 +76,7 @@
             
             canvas.toBlob(async (blob) => {
                 showStatus('Sending to SINOP...');
-                if (dataChannel && dataChannel.readyState === 'open') {
+                if (dataChannel && (dataChannel.open || dataChannel.readyState === 'open')) {
                     // Send via WebRTC
                     try {
                         const reader = new FileReader();
