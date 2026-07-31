@@ -11,14 +11,15 @@
         .camera-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; background: black; }
         video { min-width: 100%; min-height: 100%; object-fit: cover; }
         .overlay { position: absolute; inset: 0; pointer-events: none; box-sizing: border-box; }
-        .overlay-box { position: absolute; top: 6%; left: 6%; right: 6%; bottom: 6%; border: 2px dashed rgba(16, 185, 129, 0.4); border-radius: 16px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.6); transition: border-color 0.2s, box-shadow 0.2s; }
-        .overlay-box.scanned-flash { border-color: #10b981; border-style: solid; border-width: 4px; box-shadow: 0 0 0 4000px rgba(16, 185, 129, 0.3); }
-        .corner-target { position: absolute; width: 90px; height: 90px; border: 6px solid #10b981; box-sizing: border-box; background: rgba(16, 185, 129, 0.15); }
-        .corner-target.top-left { top: -3px; left: -3px; border-right: none; border-bottom: none; border-radius: 14px 0 0 0; }
-        .corner-target.top-right { top: -3px; right: -3px; border-left: none; border-bottom: none; border-radius: 0 14px 0 0; }
-        .corner-target.bottom-left { bottom: -3px; left: -3px; border-right: none; border-top: none; border-radius: 0 0 0 14px; }
-        .corner-target.bottom-right { bottom: -3px; right: -3px; border-left: none; border-top: none; border-radius: 0 0 14px 0; }
-        .align-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.9); color: #34d399; padding: 8px 18px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; border: 1.5px solid rgba(52, 211, 153, 0.4); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+        .overlay-box { position: absolute; top: 6%; left: 6%; right: 6%; bottom: 6%; border: 2px dashed rgba(255, 255, 255, 0.3); border-radius: 16px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.6); transition: border-color 0.2s, box-shadow 0.2s; }
+        .overlay-box.scanned-flash { border-color: #10b981; border-style: solid; border-width: 4px; box-shadow: 0 0 0 4000px rgba(16, 185, 129, 0.35); }
+        .target-square { position: absolute; width: 55px; height: 55px; border: 3.5px solid #ef4444; border-radius: 8px; background: rgba(239, 68, 68, 0.18); box-sizing: border-box; transition: border-color 0.15s, background-color 0.15s, transform 0.15s; }
+        .target-square.matched { border-color: #10b981; background: rgba(16, 185, 129, 0.45); box-shadow: 0 0 14px rgba(16, 185, 129, 0.8); transform: scale(1.08); }
+        .target-square.top-left { top: -4px; left: -4px; }
+        .target-square.top-right { top: -4px; right: -4px; }
+        .target-square.bottom-left { bottom: -4px; left: -4px; }
+        .target-square.bottom-right { bottom: -4px; right: -4px; }
+        .align-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.9); color: #38bdf8; padding: 8px 18px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; border: 1.5px solid rgba(56, 189, 248, 0.4); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
         .controls { background: #1e293b; padding: 20px; display: flex; justify-content: space-around; align-items: center; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
         .capture-btn { width: 70px; height: 70px; border-radius: 50%; background: white; border: 4px solid #cbd5e1; outline: 3px solid white; outline-offset: 2px; cursor: pointer; transition: transform 0.1s; }
         .capture-btn:active { transform: scale(0.95); background: #e2e8f0; }
@@ -34,11 +35,11 @@
         <video id="video" autoplay playsinline></video>
         <div class="overlay">
             <div class="overlay-box">
-                <div class="corner-target top-left"></div>
-                <div class="corner-target top-right"></div>
-                <div class="corner-target bottom-left"></div>
-                <div class="corner-target bottom-right"></div>
-                <div class="align-hint">Align 4 black corner squares inside targets</div>
+                <div class="target-square top-left" id="targetTL"></div>
+                <div class="target-square top-right" id="targetTR"></div>
+                <div class="target-square bottom-left" id="targetBL"></div>
+                <div class="target-square bottom-right" id="targetBR"></div>
+                <div class="align-hint" id="alignHint">Align 4 corner squares to scan</div>
             </div>
         </div>
     </div>
@@ -154,7 +155,10 @@
                     totalB += (d[i] + d[i+1] + d[i+2]) / 3;
                 }
                 const avgB = totalB / (sampleCanvas.width * sampleCanvas.height);
-                if (avgB < 85) return; // Ignore dark/black room or phone resting on table
+                if (avgB < 75) {
+                    resetTargetSquares();
+                    return; // Ignore dark/black room or phone resting on table
+                }
 
                 function checkCornerMarker(x1, x2, y1, y2) {
                     let dark = 0, light = 0, count = 0;
@@ -163,26 +167,31 @@
                             const idx = (y * sampleCanvas.width + x) * 4;
                             const b = (d[idx] + d[idx+1] + d[idx+2]) / 3;
                             if (b < 70) dark++;
-                            if (b > 130) light++;
+                            if (b > 120) light++;
                             count++;
                         }
                     }
                     // Requires both dark square AND white paper background in the corner!
-                    return (dark / count > 0.12) && (light / count > 0.15);
+                    return (dark / count > 0.10) && (light / count > 0.12);
                 }
 
-                // Check 4 corners corresponding to 90px targets
+                // Check 4 corner target squares
                 const tl = checkCornerMarker(5, 30, 5, 30);
                 const tr = checkCornerMarker(130, 155, 5, 30);
                 const bl = checkCornerMarker(5, 30, 190, 215);
                 const br = checkCornerMarker(130, 155, 190, 215);
+
+                setSquareMatched('targetTL', tl);
+                setSquareMatched('targetTR', tr);
+                setSquareMatched('targetBL', bl);
+                setSquareMatched('targetBR', br);
 
                 if (tl && tr && bl && br) {
                     lastAutoScan = Date.now();
                     isCapturing = true;
                     
                     if (navigator.vibrate) {
-                        try { navigator.vibrate(100); } catch(ve) {}
+                        try { navigator.vibrate([100, 50, 100]); } catch(ve) {}
                     }
 
                     const box = document.querySelector('.overlay-box');
@@ -191,11 +200,28 @@
                         setTimeout(() => box.classList.remove('scanned-flash'), 1200);
                     }
                     
-                    showStatus('⚡ Auto-Scanned Paper!', 1500);
+                    showStatus('⚡ 4 Corners Matched! Auto-Scanned!', 1500);
                     captureBtn.click();
-                    setTimeout(() => { isCapturing = false; }, 2500);
+                    setTimeout(() => { 
+                        isCapturing = false;
+                        resetTargetSquares();
+                    }, 2500);
                 }
             } catch(e) {}
+        }
+
+        function setSquareMatched(id, isMatched) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (isMatched) {
+                el.classList.add('matched');
+            } else {
+                el.classList.remove('matched');
+            }
+        }
+
+        function resetTargetSquares() {
+            ['targetTL', 'targetTR', 'targetBL', 'targetBR'].forEach(id => setSquareMatched(id, false));
         }
 
         setInterval(checkAutoDetect, 250);
