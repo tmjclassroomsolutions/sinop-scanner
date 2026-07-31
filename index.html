@@ -10,8 +10,14 @@
         .header { background: #1e293b; padding: 15px 20px; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10; }
         .camera-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; background: black; }
         video { min-width: 100%; min-height: 100%; object-fit: cover; }
-        .overlay { position: absolute; inset: 0; pointer-events: none; border: 2px solid rgba(255, 255, 255, 0.2); box-sizing: border-box; }
-        .overlay-box { position: absolute; top: 10%; left: 10%; right: 10%; bottom: 10%; border: 2px dashed #10b981; border-radius: 12px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.5); }
+        .overlay { position: absolute; inset: 0; pointer-events: none; box-sizing: border-box; }
+        .overlay-box { position: absolute; top: 8%; left: 8%; right: 8%; bottom: 8%; border: 2px dashed rgba(16, 185, 129, 0.5); border-radius: 12px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.55); }
+        .corner-target { position: absolute; width: 40px; height: 40px; border: 4px solid #10b981; box-sizing: border-box; background: rgba(16, 185, 129, 0.2); }
+        .corner-target.top-left { top: -2px; left: -2px; border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
+        .corner-target.top-right { top: -2px; right: -2px; border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }
+        .corner-target.bottom-left { bottom: -2px; left: -2px; border-right: none; border-top: none; border-radius: 0 0 0 8px; }
+        .corner-target.bottom-right { bottom: -2px; right: -2px; border-left: none; border-top: none; border-radius: 0 0 8px 0; }
+        .align-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.85); color: #34d399; padding: 6px 14px; border-radius: 16px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; border: 1px solid rgba(52, 211, 153, 0.3); }
         .controls { background: #1e293b; padding: 20px; display: flex; justify-content: space-around; align-items: center; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
         .capture-btn { width: 70px; height: 70px; border-radius: 50%; background: white; border: 4px solid #cbd5e1; outline: 3px solid white; outline-offset: 2px; cursor: pointer; transition: transform 0.1s; }
         .capture-btn:active { transform: scale(0.95); background: #e2e8f0; }
@@ -26,7 +32,13 @@
     <div class="camera-container">
         <video id="video" autoplay playsinline></video>
         <div class="overlay">
-            <div class="overlay-box"></div>
+            <div class="overlay-box">
+                <div class="corner-target top-left"></div>
+                <div class="corner-target top-right"></div>
+                <div class="corner-target bottom-left"></div>
+                <div class="corner-target bottom-right"></div>
+                <div class="align-hint">Align 4 black corner squares inside targets</div>
+            </div>
         </div>
     </div>
     
